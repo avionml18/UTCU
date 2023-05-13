@@ -80,12 +80,12 @@ bool sentData = 1;
 
 // declaration of all required UTCU states below:
 string allStates[totalBits_ID] = { "NoData", "TakeData", "To", "Wait", "Fro" };  //  All antenna states
-short stateReset[totalBits_ID] = { 0, 0, 0, 1, 1, 1 };                            //  Reset state; 
-short stateNoData[totalBits_ID] = { 0, 0, 0, 0, 0, 0 };                            //  NoData state; -> 615ms -> Hold for unmodulated data 
-short stateTakeData[totalBits_ID] = { 1, 1, 0, 0, 0, 0 };                            //  TakeData state; 
-short stateTo[totalBits_ID] = { 1, 0, 1, 0, 0, 1 };                            //  To state;
-short stateWait[totalBits_ID] = { 0, 0, 1, 1, 1, 1 };                            //  Wait state; 
-short stateFro[totalBits_ID] = { 1, 0, 0, 0, 0, 1 };                            //  Fro state; 
+short stateReset[totalBits_ID] =        { 0, 0, 0, 1, 1, 1 };                            //  Reset state; 
+short stateNoData[totalBits_ID] =       { 0, 0, 0, 0, 0, 0 };                            //  NoData state; -> 615ms -> Hold for unmodulated data 
+short stateTakeData[totalBits_ID] =     { 1, 1, 0, 0, 0, 0 };                            //  TakeData state; 
+short stateTo[totalBits_ID] =           { 1, 0, 1, 0, 0, 1 };                            //  To state;
+short stateWait[totalBits_ID] =         { 0, 0, 1, 1, 1, 1 };                            //  Wait state; 
+short stateFro[totalBits_ID] =          { 1, 0, 0, 0, 0, 1 };                            //  Fro state; 
 
 // Fucntion Prototypes 
 void generateData();
@@ -97,6 +97,7 @@ void binToArray_ID();
 void pinMode(int, string);
 void delay(double);
 void digitalWrite(int, bool);
+void test();
 
 // put your setup code here, to run once:
 void setup() {
@@ -396,6 +397,53 @@ void sendPreamble() {
         else
             digitalWrite(7, LOW);
     }
+}
+
+/**
+ * This is what the supergroup ran for testing through things
+ */
+void test() {
+    // Transmit 1
+    digitalWrite(5, HIGH);
+    delay(500);
+    // Serial.print(*basic_data);
+
+    // Data pin 7
+    digitalWrite(7, HIGH);
+    delay(1000);
+    digitalWrite(7, LOW);
+    delay(1000);
+
+    // Something Before scan!
+    digitalWrite(9, LOW);  // to fro
+    // DATA amplitudes, just set to something that isn't scan so we know to restart scan when amplitudes are switched to scan
+    // we can talk about if you want us to use txen instead
+    digitalWrite(10, HIGH);
+    digitalWrite(11, HIGH);
+    digitalWrite(13, HIGH);
+    delay(100);
+    // To
+    digitalWrite(9, HIGH);  // set to fro to high to start to scan
+    // amplitudes for scan
+    digitalWrite(10, LOW);
+    digitalWrite(11, LOW);
+    digitalWrite(13, HIGH);
+    delay(5000);
+    // Pause
+    digitalWrite(9, HIGH);  // to/fro
+    // set to amplitude off, something that isn't scan
+    // We can talk about if you want us to use txen instaed
+    digitalWrite(10, HIGH);
+    digitalWrite(11, HIGH);
+    digitalWrite(13, HIGH);
+    delay(5000);
+    // Fro
+    digitalWrite(9, LOW);  // set fro to low to let us know to start fro scan
+    // initate scan
+    digitalWrite(10, LOW);
+    digitalWrite(11, LOW);
+    digitalWrite(13, HIGH);
+    delay(10000);
 }
 
 void pinMode(int pinNum, string strOut) {
