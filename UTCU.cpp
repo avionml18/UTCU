@@ -72,6 +72,7 @@ int8_t raw_data[maxRaw] = { 0 };
 short antennaType[totalBits_ID] = { 0 };  // global antenna type
 int8_t function_ID = 0b0000000;
 string stateType;              // global state type declaration
+int totalTime = 0;
 
 // Global boolean variable for tracking if the basic or aux data has been sent to USSIM
 // --Will intiially start as 1 to prevent sending data dueing Reset or noData states
@@ -86,7 +87,7 @@ short stateTo[totalBits_ID] = { 1, 0, 1, 0, 0, 1 };                            /
 short stateWait[totalBits_ID] = { 0, 0, 1, 1, 1, 1 };                            //  Wait state; 
 short stateFro[totalBits_ID] = { 1, 0, 0, 0, 0, 1 };                            //  Fro state; 
 
-
+// Fucntion Prototypes 
 void generateData();
 void format_func();
 void sendData();
@@ -94,7 +95,7 @@ void sendDataToUSSIM();
 void sendPreamble();
 void binToArray_ID();
 void pinMode(int, string);
-void delay(int);
+void delay(double);
 void digitalWrite(int, bool);
 
 // put your setup code here, to run once:
@@ -117,6 +118,7 @@ void setup() {
 
 // put your main code here, to run repeatedly:
 void main() {
+    setup();
     generateData();
     format_func();
     sendData();
@@ -124,6 +126,8 @@ void main() {
     for (int i = 0; i < totalBits_ID; i++)
         antennaType[i] = stateReset[i];  // antennaType will be converted to state reset once time exceeds 615 ms
     sendDataToUSSIM();
+
+    cout << endl << totalTime << " miliseconds -> " << totalTime/1000 << " seconds" << endl;
 }
 
 // Function Defintions
@@ -232,6 +236,8 @@ void sendData() {
                 antennaType[j] = stateFro[j];  // antennaType set to "Fro" scan
             }
         }
+
+        cout << endl << "Sending " << stateType << endl << endl;
 
         // Sent Data -> Set the bool flag sentData to 0 to intiate reading data bits in serial 
         if (stateType == allStates[1])
@@ -392,6 +398,15 @@ void sendPreamble() {
     }
 }
 
-void pinMode(int, string);
-void delay(int);
-void digitalWrite(int, bool);
+void pinMode(int pinNum, string strOut) {
+    cout << "Pin " << pinNum << strOut << endl;
+}
+
+void delay(double num_ms) {
+    cout << "Delay: " << num_ms << "ms" << endl;
+    totalTime += num_ms;
+}
+
+void digitalWrite(int pin, bool H_L) {
+    cout << pin << " : " << H_L << endl;
+}
