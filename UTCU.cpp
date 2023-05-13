@@ -2,7 +2,7 @@
 File:         UTCU.ino
 Name:         Team 7
 Date:         5/7/2023
-Date (done):  5/7/2023
+Date (done):  5/13/2023
 Section:      UTCU
 Description:  This program will simulate a UTCU which knows timing and then will send appropriate data to USSIM
 */
@@ -10,10 +10,6 @@ Description:  This program will simulate a UTCU which knows timing and then will
 /* COMMENTS
 
 function IDs were found in Annex 10 page 46
-
-Aux data is 72 bits total
-baisc data is 32 total
-first twelve is ignore
 
 Analog/Digital output: PWM -> A1, A2, 5, 9, 10, 11, 13 (connected to red LED)
 
@@ -30,14 +26,13 @@ The fastest Miki's ARduino can go is 1kHz so 1 milisecond
 ASSUMPTION: I'm assuming somewhere in the code we are holding some bit as
             a 0 for a certain amoutn of time for unmodulated carriers/data
 
-Telling Miki team to turn off the transmitter or that we do that - what was this
-
-A cycle through the code takes about 34 - 36 seconds
-Takes 17 seconds to cycle until the LED is OFF
-Takes 18 seconds to cycle until the LED is ON
+When LED is on ->  where are scanning (State To,Wait,Fro)
+When LED is off everything else
 
 every 50 scaled microseconds
 Calculate how long to do to and to do fro
+
+We took out delays from sendDataToUSSIM function becuase the "only 'time sensitive' thing is data and txen." - Miki
 */
 
 // Includes files
@@ -82,7 +77,9 @@ bool sentData = 1;
 string allStates[totalBits_ID] = { "NoData", "TakeData", "To", "Wait", "Fro" };  //  All antenna states
 short stateReset[totalBits_ID] =        { 0, 0, 0, 1, 1, 1 };                            //  Reset state; 
 short stateNoData[totalBits_ID] =       { 0, 0, 0, 0, 0, 0 };                            //  NoData state; -> 615ms -> Hold for unmodulated data 
-short stateTakeData[totalBits_ID] =     { 1, 1, 0, 0, 0, 0 };                            //  TakeData state; 
+short stateTakeData[totalBits_ID] =     { 1, 0, 0, 0, 0, 0 };                            //  TakeData state; !!!!!!!!! I changed data bit to 0 !!!!!!!!
+// Format function needs to happened after statTakeData and before sending to populate basic_data array or aux data array
+// The way we have it, we would have aux populated and then wanting to send basic but the format function happens before we set the data bit to 1
 short stateTo[totalBits_ID] =           { 1, 0, 1, 0, 0, 1 };                            //  To state;
 short stateWait[totalBits_ID] =         { 0, 0, 1, 1, 1, 1 };                            //  Wait state; 
 short stateFro[totalBits_ID] =          { 1, 0, 0, 0, 0, 1 };                            //  Fro state; 
@@ -112,6 +109,7 @@ void setup() {
 
     // Begin Timer and set antennaType to reset state
     cout << "Serial.begin(9600)" << endl;
+    //Serial.begin(9600);
     for (int i = 0; i < totalBits_ID; i++) {
         antennaType[i] = stateReset[i];  // antennaType is set to reset at beginning to accept states later on
     }
@@ -119,10 +117,15 @@ void setup() {
 
 // put your main code here, to run repeatedly:
 void main() {
+    cout << "setup()" << endl << endl;
     setup();
+    cout << endl << "generateData()" << endl << endl;
     generateData();
+    cout << "format_func()" << endl << endl;
     format_func();
+    cout << "sendData()" << endl;
     sendData();
+    cout << endl << "Reseting for new cycle" << endl << endl;
     // Reset the antenna to a reset state or let USSIM know we are about to generate new data and loop through the process
     for (int i = 0; i < totalBits_ID; i++)
         antennaType[i] = stateReset[i];  // antennaType will be converted to state reset once time exceeds 615 ms
@@ -275,8 +278,6 @@ void sendDataToUSSIM() {
     else
         digitalWrite(5, LOW);
 
-    delay(bitReadTime);
-
     // Data bit
     // If data bit is 1 -> send basic data
     if (antennaType[1]) {
@@ -285,12 +286,14 @@ void sendDataToUSSIM() {
         digitalWrite(7, HIGH);
 
         if (!sentData) {
+            cout << "Sending Preamble" << endl << endl;
             // Sending Preamble in serial using pin 7
             sendPreamble();
 
+            cout << endl << "Sending Basic" << endl << endl;
             // Send Basic Data
             for (int i = 0; i < maxData; i++) {
-                delay(bitReadTime);
+                delay(bitReadTime); // send bits every 64 miliseconds
 
                 if (basic_data[i])
                     digitalWrite(7, HIGH);
@@ -309,12 +312,14 @@ void sendDataToUSSIM() {
         digitalWrite(7, LOW);
 
         if (!sentData) {
+            cout << endl << "Sending Preamble" << endl << endl;
             // Sending Preamble in serial using pin 7
             sendPreamble();
 
+            cout << endl << "Sending Aux" << endl << endl;
             // Send Aux Data
             for (int i = 0; i < maxAux; i++) {
-                delay(bitReadTime);
+                delay(bitReadTime); // send bits every 64 miliseconds
 
                 if (aux_data[i])
                     digitalWrite(7, HIGH);
@@ -325,7 +330,6 @@ void sendDataToUSSIM() {
             sentData = 1;
         }
     }
-    delay(bitReadTime);
 
     // To/Fro bit
     if (antennaType[2])
@@ -333,23 +337,17 @@ void sendDataToUSSIM() {
     else
         digitalWrite(9, LOW);
 
-    delay(bitReadTime);
-
     // Anteanna 0
     if (antennaType[3])
         digitalWrite(10, HIGH);
     else
         digitalWrite(10, LOW);
 
-    delay(bitReadTime);
-
     // Anteanna 1
     if (antennaType[4])
         digitalWrite(11, HIGH);
     else
         digitalWrite(11, LOW);
-
-    delay(bitReadTime);
 
     // Anteanna 2 - Least Sig Bit
     if (antennaType[5])
@@ -377,7 +375,7 @@ void binToArray_ID() {
  * This function will send the Preamble -- Barker Code and Function ID -- to USSIM
  */
 void sendPreamble() {
-
+    cout << "Sending Barker Code" << endl << endl;
     // Send Barker code
     for (int i = 0; i < maxBarker; i++) {
         delay(bitReadTime);  // send bits every 64 miliseconds
@@ -387,8 +385,10 @@ void sendPreamble() {
             digitalWrite(7, LOW);
     }
 
-    // Brief pause before sending 
+    // Brief pause before sending barker code as per Dr. Laberge's diagram
     delay(1000);
+
+    cout << endl << "Sending Function ID Code" << endl << endl;
     // Send Function ID
     for (int i = 0; i < totalBits_ID; i++) {
         delay(bitReadTime);  // send bits every 64 miliseconds
@@ -397,53 +397,6 @@ void sendPreamble() {
         else
             digitalWrite(7, LOW);
     }
-}
-
-/**
- * This is what the supergroup ran for testing through things
- */
-void test() {
-    // Transmit 1
-    digitalWrite(5, HIGH);
-    delay(500);
-    // Serial.print(*basic_data);
-
-    // Data pin 7
-    digitalWrite(7, HIGH);
-    delay(1000);
-    digitalWrite(7, LOW);
-    delay(1000);
-
-    // Something Before scan!
-    digitalWrite(9, LOW);  // to fro
-    // DATA amplitudes, just set to something that isn't scan so we know to restart scan when amplitudes are switched to scan
-    // we can talk about if you want us to use txen instead
-    digitalWrite(10, HIGH);
-    digitalWrite(11, HIGH);
-    digitalWrite(13, HIGH);
-    delay(100);
-    // To
-    digitalWrite(9, HIGH);  // set to fro to high to start to scan
-    // amplitudes for scan
-    digitalWrite(10, LOW);
-    digitalWrite(11, LOW);
-    digitalWrite(13, HIGH);
-    delay(5000);
-    // Pause
-    digitalWrite(9, HIGH);  // to/fro
-    // set to amplitude off, something that isn't scan
-    // We can talk about if you want us to use txen instaed
-    digitalWrite(10, HIGH);
-    digitalWrite(11, HIGH);
-    digitalWrite(13, HIGH);
-    delay(5000);
-    // Fro
-    digitalWrite(9, LOW);  // set fro to low to let us know to start fro scan
-    // initate scan
-    digitalWrite(10, LOW);
-    digitalWrite(11, LOW);
-    digitalWrite(13, HIGH);
-    delay(10000);
 }
 
 void pinMode(int pinNum, string strOut) {
