@@ -30,59 +30,69 @@ When LED is on ->  where are scanning (State To,Wait,Fro)
 When LED is off everything else
 
 every 50 scaled microseconds
-Calculate how long to do to and to do fro
+Calculate how long to do to and to do fro for each station which means changing the delay parameters depending on the station
 
 We took out delays from sendDataToUSSIM function becuase the "only 'time sensitive' thing is data and txen." - Miki
 */
 
 // Includes files
 #include <stdlib.h>
-#include <cstdint>
 #include <string>
 #include <ostream>
 #include <iostream>
 using namespace std;
 
 // Global Constants
-const double sequenceTime = 615;    // total time given from shift to one function to another (in miliseconds) [615ms orginally]
 const double bitReadTime = 0.15;    // total time to read each sent bit (in miliseconds) [64ms orginally]
-// Miki's Team reads bits every 0.1 miroseconds
-const int totalBits_ID = 6;
-const int8_t maxBarker = 5;
+// Miki's Team read0s bits every 0.1 miroseconds
+const int maxAnt = 6;
+const int maxID = 7;
+const int maxBarker = 5;
 const int maxData = 32;  // aux data. Hold 32 bits total
 const int maxAux = 72;   // basic data. holds 72 bits total
 const int maxRaw = 60;
+const int maxRawFirstGo = 20;
+
+// AZ Time: 1550 ms
+// BAZ TIme: 1550 ms
+// EL Time: 2000 ms (Need to ask Miki)
+const int delayToFro = 5000; // in ms
+const int delayWait = 10; // in ms
+
+// Delete these for Arduino
 const string OUTPUT = " set to output";
 const bool HIGH = 1;
 const bool LOW = 0;
 
 
 // Global Variables/Arrays
-bool function_ID_array[totalBits_ID] = { 0 };
-char function_Type_name[] = "AZ";  // can also be EL, and BAZ
+bool function_ID[maxID] = { 0 };  // function ID is 7 bits long
+bool AZ_function[] = { 0, 0, 1, 1, 0, 0, 1 };
+bool BAZ_function[] = { 1, 0, 0, 1, 0, 0, 1 };
+bool EL_function[] = { 1, 1, 0, 0, 0, 0, 1 };
+string function_Type_name = "AZ";  // can also be EL, and BAZ
 bool barker_code[maxBarker] = { 1, 1, 1, 0, 1 };
 bool basic_data[maxData] = { 0 };  // basic data. holds 32 bits total
 bool aux_data[maxAux] = { 0 };     // aux data. Hold 72 bits total
-int8_t raw_data[maxRaw] = { 0 };
-short antennaType[totalBits_ID] = { 0 };  // global antenna type
-int8_t function_ID = 0b0000000;
-string stateType;              // global state type declaration
-int totalTime = 0;
+bool raw_data[maxRaw] = { 0 };
+short antennaType[maxAnt] = { 0 };  // global antenna typestring stateType;              // global state type declaration
+double totalTime = 0;
+string stateType;
 
 // Global boolean variable for tracking if the basic or aux data has been sent to USSIM
 // --Will intiially start as 1 to prevent sending data dueing Reset or noData states
 bool sentData = 1;
 
 // declaration of all required UTCU states below:
-string allStates[totalBits_ID] = { "NoData", "TakeData", "To", "Wait", "Fro" };  //  All antenna states
-short stateReset[totalBits_ID] =        { 0, 0, 0, 1, 1, 1 };                            //  Reset state; 
-short stateNoData[totalBits_ID] =       { 0, 0, 0, 0, 0, 0 };                            //  NoData state; -> 615ms -> Hold for unmodulated data 
-short stateTakeData[totalBits_ID] =     { 1, 0, 0, 0, 0, 0 };                            //  TakeData state; !!!!!!!!! I changed data bit to 0 !!!!!!!!
+string allStates[maxAnt] = { "NoData", "TakeData", "To", "Wait", "Fro" };  //  All antenna states
+short stateReset[maxAnt] =        { 0, 0, 0, 1, 1, 1 };                            //  Reset state; 
+short stateNoData[maxAnt] =       { 0, 0, 0, 0, 0, 0 };                            //  NoData state; -> 615ms -> Hold for unmodulated data 
+short stateTakeData[maxAnt] =     { 1, 0, 0, 0, 0, 0 };                            //  TakeData state; !!!!!!!!! I changed data bit to 0 !!!!!!!!
 // Format function needs to happened after statTakeData and before sending to populate basic_data array or aux data array
 // The way we have it, we would have aux populated and then wanting to send basic but the format function happens before we set the data bit to 1
-short stateTo[totalBits_ID] =           { 1, 0, 1, 0, 0, 1 };                            //  To state;
-short stateWait[totalBits_ID] =         { 0, 0, 1, 1, 1, 1 };                            //  Wait state; 
-short stateFro[totalBits_ID] =          { 1, 0, 0, 0, 0, 1 };                            //  Fro state; 
+short stateTo[maxAnt] =           { 1, 0, 1, 0, 0, 1 };                            //  To state;
+short stateWait[maxAnt] =         { 0, 0, 1, 1, 1, 1 };                            //  Wait state; 
+short stateFro[maxAnt] =          { 1, 0, 0, 0, 0, 1 };                            //  Fro state; 
 
 // Fucntion Prototypes 
 void generateData();
@@ -90,15 +100,13 @@ void format_func();
 void sendData();
 void sendDataToUSSIM();
 void sendPreamble();
-void binToArray_ID();
 void pinMode(int, string);
 void delay(double);
 void digitalWrite(int, bool);
-void test();
 
 // put your setup code here, to run once:
 void setup() {
-
+    srand(0);
     // Set Up Pins
     pinMode(5, OUTPUT); // Trasnmit bit - MSB
     pinMode(7, OUTPUT); // Data bit
@@ -110,9 +118,10 @@ void setup() {
     // Begin Timer and set antennaType to reset state
     cout << "Serial.begin(9600)" << endl;
     //Serial.begin(9600);
-    for (int i = 0; i < totalBits_ID; i++) {
+    for (int i = 0; i < maxAnt; i++) {
         antennaType[i] = stateReset[i];  // antennaType is set to reset at beginning to accept states later on
     }
+    return;
 }
 
 // put your main code here, to run repeatedly:
@@ -127,11 +136,13 @@ void main() {
     sendData();
     cout << endl << "Reseting for new cycle" << endl << endl;
     // Reset the antenna to a reset state or let USSIM know we are about to generate new data and loop through the process
-    for (int i = 0; i < totalBits_ID; i++)
+    for (int i = 0; i < maxAnt; i++)
         antennaType[i] = stateReset[i];  // antennaType will be converted to state reset once time exceeds 615 ms
     sendDataToUSSIM();
 
-    cout << endl << totalTime << " miliseconds -> " << totalTime/1000 << " seconds" << endl;
+    cout << endl << "Total Time (ns): " << round(totalTime*1000) << " nanoseconds" 
+        << endl << "Total Time (ms): " << totalTime << " miliseconds" << endl
+        << endl << "Total Time (s): " << round(totalTime / 1000) << " seconds" << endl;
 }
 
 // Function Defintions
@@ -141,36 +152,34 @@ void main() {
  * and unmodulated data will be filled in -> raw_data array
  */
 void generateData() {
-    if (function_Type_name == "AZ") {
-        int8_t AZ_function = 0b0011001;  //all function ID's are 7 bits
-        function_ID = AZ_function;       //stored in the first slot
+    for (int i = 0; i < maxID; i++) {
+        // AZ Function
+        if (function_Type_name == "AZ") {
+            function_ID[i] = AZ_function[i];
+        }
+
+        // BAZ Function
+        else if (function_Type_name == "BAZ") {
+            function_ID[i] = BAZ_function[i];
+        }
+
+        // EL Function
+        else if (function_Type_name == "EL") {
+            function_ID[i] = EL_function[i];
+        }
     }
-
-    else if (function_Type_name == "BAZ") {
-        int8_t BAZ_function = 0b1001001;  //all function ID's are 7 bits
-        function_ID = BAZ_function;       //stored in the first slot
-    }
-
-    else if (function_Type_name == "EL") {
-        int8_t EL_function = 0b1100001;  //all function ID's are 7 bits
-        function_ID = EL_function;       //stored in the first slot
-    }
-
-    // After updating funciton ID, convert function ID to an array form
-    binToArray_ID();
-
     // If it's the first go, then put the 20 bits of unmodualted data, otherwise fill all 60 bits with unmodualted data
     if (antennaType[1]) {
-        for (int i = 0; i < 20; i++) {
+        for (int i = 0; i < maxRawFirstGo; i++) {
             // 20 bits of raw data with each bit ranging from 0 to 1
-            raw_data[i] = rand() % 2;
+            (rand() % 2 ? raw_data[i] = true : raw_data[i] = false);
         }
     }
 
     else {
         for (int i = 0; i < maxRaw; i++) {
             // 60 bits of raw data with each bit ranging from 0 to 1
-            raw_data[i] = rand() % 2;
+            (rand() % 2 ? raw_data[i] = true : raw_data[i] = false);
         }
 
     }
@@ -187,12 +196,12 @@ void format_func() {
     // if data_word equals 1 then the data gets placed into the basic data array
     if (dataBit) {
 
-        for (int i = 0; i < 20; i++) {
-            raw_data[i] = basic_data[i];
+        for (int i = 0; i < maxRawFirstGo; i++) {
+            basic_data[i] = raw_data[i];
         }
 
-        for (int i = 20; i < maxData; i++) {
-            basic_data[i] = rand() % 2;
+        for (int i = maxRawFirstGo; i < maxData; i++) {
+            (rand() % 2 ? basic_data[i] = true : basic_data[i] = false);
         }
     }
 
@@ -200,11 +209,11 @@ void format_func() {
     else {
 
         for (int i = 0; i < maxRaw; i++) {
-            raw_data[i] = aux_data[i];
+            aux_data[i] = raw_data[i];
         }
 
         for (int i = maxRaw; i < maxAux; i++) {
-            aux_data[i] = rand() % 2;
+            (rand() % 2 ? aux_data[i] = true : aux_data[i] = false);
         }
     }
 }
@@ -218,7 +227,7 @@ void sendData() {
 
         // Update the antennaType to be in a certain state
         //  By the end of this for loop, send the antennaType to USSIM
-        for (int j = 0; j < totalBits_ID; j++) {
+        for (int j = 0; j < maxAnt; j++) {
 
             if (stateType == allStates[0]) {
                 antennaType[j] = stateNoData[j];  //antennaType set to sending no data
@@ -254,11 +263,11 @@ void sendData() {
 
         // To or fro delay
         if (stateType == allStates[2] || stateType == allStates[4])
-            delay(5000);
+            delay(delayToFro);
 
         // Wait
         else if (stateType == allStates[3])
-            delay(10);
+            delay(delayWait);
     }
     // delay(sequenceTime); // 615ms delay
 }
@@ -357,21 +366,6 @@ void sendDataToUSSIM() {
 }
 
 /**
- * This function will take function ID in the form of binary digits and make them into an array to be iterated through
- * in sendData()
- */
-void binToArray_ID() {
-    int8_t temp = function_ID;
-    bool reminder;
-    for (int i = 0; i < totalBits_ID; i++) {
-
-        reminder = temp % 2;
-        temp = temp >> 2;
-        function_ID_array[(totalBits_ID - 1) - i] = reminder;
-    }
-}
-
-/**
  * This function will send the Preamble -- Barker Code and Function ID -- to USSIM
  */
 void sendPreamble() {
@@ -390,9 +384,9 @@ void sendPreamble() {
 
     cout << endl << "Sending Function ID Code" << endl << endl;
     // Send Function ID
-    for (int i = 0; i < totalBits_ID; i++) {
+    for (int i = 0; i < maxID; i++) {
         delay(bitReadTime);  // send bits every 64 miliseconds
-        if (function_ID_array[i])
+        if (function_ID[i])
             digitalWrite(7, HIGH);
         else
             digitalWrite(7, LOW);
