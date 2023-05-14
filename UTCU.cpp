@@ -2,7 +2,7 @@
 File:         UTCU.ino
 Name:         Team 7
 Date:         5/7/2023
-Date (done):  5/13/2023
+Date (done):  5/14/2023
 Section:      UTCU
 Description:  This program will simulate a UTCU which knows timing and then will send appropriate data to USSIM
 */
@@ -87,9 +87,8 @@ bool sentData = 1;
 string allStates[maxAnt] = { "NoData", "TakeData", "To", "Wait", "Fro" };  //  All antenna states
 short stateReset[maxAnt] =        { 0, 0, 0, 1, 1, 1 };                            //  Reset state; 
 short stateNoData[maxAnt] =       { 0, 0, 0, 0, 0, 0 };                            //  NoData state; -> 615ms -> Hold for unmodulated data 
-short stateTakeData[maxAnt] =     { 1, 0, 0, 0, 0, 0 };                            //  TakeData state; !!!!!!!!! I changed data bit to 0 !!!!!!!!
-// Format function needs to happened after statTakeData and before sending to populate basic_data array or aux data array
-// The way we have it, we would have aux populated and then wanting to send basic but the format function happens before we set the data bit to 1
+short stateTakeData[maxAnt] =     { 1, 1, 0, 0, 0, 0 };                            //  TakeData state;
+// If the Data pin has to be 1 in order for Miki's team to read the data, then we could never send the Aux data
 short stateTo[maxAnt] =           { 1, 0, 1, 0, 0, 1 };                            //  To state;
 short stateWait[maxAnt] =         { 0, 0, 1, 1, 1, 1 };                            //  Wait state; 
 short stateFro[maxAnt] =          { 1, 0, 0, 0, 0, 1 };                            //  Fro state; 
@@ -106,7 +105,7 @@ void digitalWrite(int, bool);
 
 // put your setup code here, to run once:
 void setup() {
-    srand(0);
+    cout << "setup()" << endl << endl;
     // Set Up Pins
     pinMode(5, OUTPUT); // Trasnmit bit - MSB
     pinMode(7, OUTPUT); // Data bit
@@ -126,13 +125,8 @@ void setup() {
 
 // put your main code here, to run repeatedly:
 void main() {
-    cout << "setup()" << endl << endl;
     setup();
-    cout << endl << "generateData()" << endl << endl;
     generateData();
-    cout << "format_func()" << endl << endl;
-    format_func();
-    cout << "sendData()" << endl;
     sendData();
     cout << endl << "Reseting for new cycle" << endl << endl;
     // Reset the antenna to a reset state or let USSIM know we are about to generate new data and loop through the process
@@ -152,6 +146,7 @@ void main() {
  * and unmodulated data will be filled in -> raw_data array
  */
 void generateData() {
+    cout << endl << "generateData()" << endl << endl;
     for (int i = 0; i < maxID; i++) {
         // AZ Function
         if (function_Type_name == "AZ") {
@@ -190,6 +185,7 @@ void generateData() {
  * aux_data will be filled in or basic_data will be filled in
  */
 void format_func() {
+    cout << "format_func()" << endl << endl;
     // Set the databit to the "data bit" which is atenna type's 2 bool element
     bool dataBit = antennaType[1];
 
@@ -222,6 +218,7 @@ void format_func() {
  * Function made to check for elasped time to determine if antennaType is set to reset + if antennaType is set to every listed state *
  */
 void sendData() {
+    cout << "sendData()" << endl;
     for (int i = 0; i < 5; i++) {  // for loop that will run through each listed state
         stateType = allStates[i];
 
@@ -252,9 +249,14 @@ void sendData() {
 
         cout << endl << "Sending " << stateType << endl << endl;
 
-        // Sent Data -> Set the bool flag sentData to 0 to intiate reading data bits in serial 
-        if (stateType == allStates[1])
+        
+        // State = TakeData
+        //  Format the data after the data pin has been set or not
+        //  Sent Data -> Set the bool flag sentData to 0 to intiate reading data bits in serial 
+        if (stateType == allStates[1]) {
+            format_func();
             sentData = 0;
+        }
 
         // SETTING PINS -> COMMUNICATING WITH USSIM //
         sendDataToUSSIM();
