@@ -37,6 +37,7 @@ We took out delays from sendDataToUSSIM function becuase the "only 'time sensiti
 
 // Includes files
 #include <stdlib.h>
+// Delete these files below for Arduino
 #include <string>
 #include <iostream>
 using namespace std;
