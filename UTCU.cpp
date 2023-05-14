@@ -110,6 +110,7 @@ void format_func();
 void sendData();
 void sendDataToUSSIM();
 void sendPreamble();
+// Delete the defintions below for Arduino
 void pinMode(int, string);
 void delay(double);
 void digitalWrite(int, bool);
@@ -403,6 +404,7 @@ void sendPreamble() {
             digitalWrite(7, LOW);
     }
 }
+// Delete the defintions below for Arduino
 
 void pinMode(int pinNum, string strOut) {
     cout << "Pin " << pinNum << strOut << endl;
