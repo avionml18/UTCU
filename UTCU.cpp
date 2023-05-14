@@ -38,7 +38,6 @@ We took out delays from sendDataToUSSIM function becuase the "only 'time sensiti
 // Includes files
 #include <stdlib.h>
 #include <string>
-#include <ostream>
 #include <iostream>
 using namespace std;
 
@@ -96,7 +95,7 @@ bool sentData = 1;
 bool sendBasic = 1; 
 
 // declaration of all required UTCU states below:
-string allStates[maxAnt] =        { "NoData", "TakeData", "To", "Wait", "Fro" };  //  All antenna states
+string allStates[maxAnt] =        { "NoData", "TakeData", "To", "Wait", "Fro" };   //  All antenna states
 short stateReset[maxAnt] =        { 0, 0, 0, 1, 1, 1 };                            //  Reset state; 
 short stateNoData[maxAnt] =       { 0, 0, 0, 0, 0, 0 };                            //  NoData state; ->Hold for unmodulated data long?
 short stateTakeData[maxAnt] =     { 1, 1, 0, 0, 0, 0 };                            //  TakeData state;
@@ -142,7 +141,7 @@ void main() {
     format_func();
     sendData();
 
-    // Alternator for sending either basic or aux data
+    // Alternator for sending either basic or aux data -> Delete if hardcoding we are just told to do either one
     sendBasic ? sendBasic = 0 : sendBasic = 1;
 
     cout << endl << "Reseting for new cycle" << endl << endl;
@@ -404,6 +403,7 @@ void sendPreamble() {
             digitalWrite(7, LOW);
     }
 }
+
 // Delete the defintions below for Arduino
 
 void pinMode(int pinNum, string strOut) {
